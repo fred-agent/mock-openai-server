@@ -1,5 +1,5 @@
 import express from 'express';
-import {getId, clipText, getTimestampSeconds, isIso6391_1, getRandomDivisibleBy} from "./utils.js";
+import {getId, clipText, getTimestampSeconds, isIso6391_1, getRandomDivisibleBy, sleep} from "./utils.js";
 import {oneShotResponse, streamResponse} from './impls/chat.js';
 import {textToImage, getImageFileName, parseDimensions} from './impls/image.js';
 import {generateRandomAudio, getAudioFileName, mimeTypeMap, transcribeAudio, translateAudio} from './impls/audio.js';
@@ -19,6 +19,13 @@ const __dirname = path.dirname(__filename);
 
 const contents = fs.readFileSync('./config.yaml', 'utf-8');
 const config = yaml.parse(contents);
+
+// allow container/runtime overrides for host/port
+config.server = {
+    ...config.server,
+    host: process.env.HOST || config.server.host,
+    port: parseInt(process.env.PORT || config.server.port, 10),
+};
 
 (async () => {
     initChat(config);
@@ -56,10 +63,47 @@ function delayMiddleware(delayMs) {
 const app = express();
 app.use(express.json());
 
-if(config.responseDelay.enable) {
-    const chosenDelay = getRandomDivisibleBy(config.responseDelay.minDelayMs, config.responseDelay.maxDelayMs, 1);
-    console.log(`Delaying all responses by ${chosenDelay} milliseconds`);
-    app.use(delayMiddleware(chosenDelay));
+// lightweight per-request metrics for periodic summaries
+let inFlightRequests = 0;
+let windowStarted = 0;
+let windowCompleted = 0;
+let windowErrors = 0;
+let windowLatencies = [];
+
+app.use((req, res, next) => {
+    const startNs = process.hrtime.bigint();
+    inFlightRequests++;
+    windowStarted++;
+
+    res.on('finish', () => {
+        inFlightRequests--;
+        windowCompleted++;
+        const durationMs = Number(process.hrtime.bigint() - startNs) / 1e6;
+        windowLatencies.push(durationMs);
+        if (res.statusCode >= 500) {
+            windowErrors++;
+        }
+    });
+
+    next();
+});
+
+const summaryLogIntervalMs = config.monitoring?.summaryLogIntervalMs ?? 5000;
+if (summaryLogIntervalMs > 0) {
+    setInterval(() => {
+        const count = windowLatencies.length;
+        const sorted = [...windowLatencies].sort((a, b) => a - b);
+        const avgMs = count ? (sorted.reduce((a, b) => a + b, 0) / count) : 0;
+        const p95Ms = count ? sorted[Math.floor(0.95 * (count - 1))] : 0;
+        const maxMs = count ? sorted[sorted.length - 1] : 0;
+
+        console.log(`[summary ${new Date().toISOString()}] in_flight=${inFlightRequests} started=${windowStarted} completed=${windowCompleted} errors=${windowErrors} avg_ms=${avgMs.toFixed(1)} p95_ms=${p95Ms.toFixed(1)} max_ms=${maxMs.toFixed(1)}`);
+
+        windowStarted = 0;
+        windowCompleted = 0;
+        windowErrors = 0;
+        windowLatencies = [];
+    }, summaryLogIntervalMs);
 }
 
 function checkAuth(req, validKeys = []) {
@@ -82,7 +126,11 @@ function checkAuth(req, validKeys = []) {
     return false;
 }
 
-app.post('/v1/chat/completions', (req, res) => {
+app.get('/health', (_req, res) => {
+    res.json({ status: 'ok' });
+});
+
+app.post('/v1/chat/completions', async (req, res) => {
     if(!checkAuth(req, config.apiKeys)) {
         res.sendStatus(401);
     }
@@ -97,6 +145,14 @@ app.post('/v1/chat/completions', (req, res) => {
         "openai-version": apiVersion,
         ...headers
     } = req.headers;
+
+    const latencyMs = config.responseDelay.enable
+        ? getRandomDivisibleBy(config.responseDelay.minDelayMs, config.responseDelay.maxDelayMs, 1)
+        : 0;
+
+    if (latencyMs) {
+        await sleep(latencyMs);
+    }
 
     if(temperature) {
         if(temperature < 0 || temperature > 1) {

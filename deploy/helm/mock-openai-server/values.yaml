@@ -1,0 +1,158 @@
+image:
+  repository: mock-openai-server
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8383
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: mock-openai.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+replicaCount: 1
+
+env:
+  HOST: "0.0.0.0"
+  PORT: "8383"
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+config:
+  publicFilesDirectory: "public"
+  server:
+    host: "0.0.0.0"
+    port: 8383
+  apiKeys:
+    - "key-1"
+  organizationName: "my sample org"
+  responseDelay:
+    enable: false
+    minDelayMs: 1000
+    maxDelayMs: 2000
+  monitoring:
+    summaryLogIntervalMs: 5000
+  modelConfigs:
+    chat:
+      models:
+        chatgpt-4o-latest:
+          maxTokens: 4096
+        model-2:
+          maxTokens: 8192
+        gpt-4o:
+          maxTokens: 4096
+      sampleResponses:
+        - "This is a mock response for text input. How can I help you further?"
+      sampleResponsesForJsonOutput:
+        - {"userId":12345}
+      tools:
+        functions:
+          - functionName: "calculate_sum"
+            arguments: { "a": 10, "b": 20 }
+            regexToMatchAgainstPrompt: ".*sum.*"
+    vlm:
+      models:
+        dall-e-2: { maxTokens: 8192 }
+        dall-e-3: { maxTokens: 8192 }
+      sampleResponses:
+        - "Mock vision response."
+      sampleResponsesForJsonOutput:
+        - {"description":"example"}
+    imageGeneration:
+      models:
+        dall-e-2:
+          defaultWidth: 512
+          defaultHeight: 512
+          maxImages: 10
+          availableQualities: ["standard"]
+          availableSizes: ["256x256", "512x512", "1024x1024"]
+          availableStyles: null
+        dall-e-3:
+          defaultWidth: 1024
+          defaultHeight: 1024
+          maxImages: 1
+          availableQualities: ["standard", "hd"]
+          availableSizes: ["1024x1024", "1792x1024", "1024x1792"]
+          availableStyles: ["vivid", "natural"]
+      sampleResponseFiles:
+        - "./sample_media/images/image-0.png"
+      generationFrom: "generated"
+      availableResponseFormats: ["url", "b64_json"]
+    imageVariations:
+      models:
+        dall-e-2:
+          defaultWidth: 512
+          defaultHeight: 512
+          maxImages: 10
+          availableSizes: [ "256x256", "512x512", "1024x1024" ]
+        dall-e-3:
+          defaultWidth: 1024
+          defaultHeight: 1024
+          maxImages: 1
+          availableSizes: [ "1024x1024", "1792x1024", "1024x1792" ]
+      sampleResponseFiles:
+        - "./sample_media/images/image-0.png"
+      generationFrom: "generated"
+      availableResponseFormats: ["url", "b64_json"]
+    imageEdits:
+      models:
+        dall-e-2:
+          defaultWidth: 512
+          defaultHeight: 512
+          maxImages: 10
+          availableSizes: [ "256x256", "512x512", "1024x1024" ]
+      sampleResponseFiles:
+        - "./sample_media/images/image-0.png"
+      generationFrom: "generated"
+      availableResponseFormats: ["url", "b64_json"]
+    audioGeneration:
+      models:
+        tts-1:
+          voices: ["alloy","ash","coral","echo","fable","onyx","nova","sage","shimmer"]
+          maxDurationSeconds: 1800
+        tts-1-hd:
+          voices: ["alloy","ash","coral","echo","fable","onyx","nova","sage","shimmer"]
+          maxDurationSeconds: 1800
+      availableResponseFormats: ["mp3", "opus", "aac", "flac", "wav", "pcm"]
+      allowedSpeedRange: [0.25, 4.0]
+      sampleResponseFiles:
+        - "./sample_media/audio/audio-0.mp3"
+      generationFrom: "generated"
+    audioTranscription:
+      models:
+        whisper-1: {}
+      availableResponseFormats: ["json", "text", "srt", "verbose_json", "vtt"]
+      allowedTimestampGranularities: ["word", "segment"]
+      sampleResponses:
+        - "transcript"
+    audioTranslation:
+      models:
+        whisper-1: {}
+      availableResponseFormats: ["json", "text", "srt", "verbose_json", "vtt"]
+      sampleResponses:
+        - "translation"
+    embeddings:
+      models:
+        text-embedding-ada-002:
+          maxInputTokens: 8192
+      maxDimensions: 2048
+      availableEncodingFormats: ['float', 'base64']

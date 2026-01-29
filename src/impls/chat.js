@@ -212,9 +212,9 @@ function streamResponse({ model, messages, tools, toolChoice, maxTokens, tempera
 
         for(let idx = 0; idx < contentOrToolCalls['tool_calls'].length; idx++) {
             const tc = contentOrToolCalls['tool_calls'][idx];
-            const argumentStringChunks = JSON.stringify(tc.arguments).split(/\s+/);
+            const argumentStringChunk = JSON.stringify(tc.arguments);
 
-            argumentStringChunks.forEach(argumentStringChunk => chunks.push({
+            chunks.push({
                 index: idx,
                 id: toolCallId,
                 type: 'function',
@@ -222,11 +222,11 @@ function streamResponse({ model, messages, tools, toolChoice, maxTokens, tempera
                     name: tc.name,
                     arguments: argumentStringChunk
                 }
-            }));
+            });
         }
     } else {
         areTheseToolChunks = false;
-        chunks = contentOrToolCalls['content'].split(/\s+/);
+        chunks = [contentOrToolCalls['content']];
     }
 
     let chunkIndex = 0;
@@ -255,7 +255,7 @@ function streamResponse({ model, messages, tools, toolChoice, maxTokens, tempera
         }
 
         chunkIndex++;
-        setTimeout(sendData, 100);
+        setImmediate(sendData);
     };
 
     sendData();

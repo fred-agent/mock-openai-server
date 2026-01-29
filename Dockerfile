@@ -24,10 +24,10 @@ WORKDIR /app
 # Copy only the necessary files from the build stage
 COPY --from=build /app /app
 
-# Declare a build argument for the port
-ARG PORT=3000
+# Declare a build argument for the port (keeps helm/service aligned with config default 8383)
+ARG PORT=8383
 
-# Expose the port supplied during build or default to 3000
+# Expose the port supplied during build or default to 8383
 EXPOSE ${PORT}
 
 # Set the default command

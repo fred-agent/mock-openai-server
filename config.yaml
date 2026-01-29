@@ -11,6 +11,8 @@ responseDelay:
   enable: false
   minDelayMs: 1000
   maxDelayMs: 2000
+monitoring:
+  summaryLogIntervalMs: 5000  # set to 0 to disable periodic summaries
 modelConfigs:
   chat:
     models:
