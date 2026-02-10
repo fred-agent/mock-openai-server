@@ -132,8 +132,11 @@ app.get('/health', (_req, res) => {
 
 app.post('/v1/chat/completions', async (req, res) => {
     if(!checkAuth(req, config.apiKeys)) {
-        res.sendStatus(401);
+        return res.sendStatus(401);
     }
+
+    const requestId = getId();
+    res.setHeader('x-request-id', requestId);
 
     let { model, messages, tools, tool_choice: toolChoice, stream, stream_options: streamOptions, max_tokens: maxTokensOld, max_completion_tokens: maxTokensNew, temperature, stop: stopSequences, top_p: topP, n: numGenerations, user, frequency_penalty: frequencyPenalty, presence_penalty: presencePenalty, response_format: responseFormat } = req.body;
 
@@ -267,33 +270,46 @@ app.post('/v1/chat/completions', async (req, res) => {
         }
     }
 
+    let responseClosed = false;
+    const markResponseClosed = () => { responseClosed = true; };
+    res.on('close', markResponseClosed);
+    res.on('finish', markResponseClosed);
+
     if(stream) {
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
-        res.setHeader('x-request-id', getId());
         //res.flushHeaders();
+
+        const canWrite = () => !(responseClosed || res.writableEnded || res.destroyed);
 
         streamResponse({
             model, messages, tools, toolChoice, maxTokens, temperature, stopSequences, frequencyPenalty, presencePenalty, addExtraUsageOnlyChunk, isJsonOutput, givenJsonSchema,
             onChunk: (chunk) => {
+                if (!canWrite()) return;
                 res.write(`data: ${JSON.stringify(chunk)}\n\n`);
             },
             onCompletion: () => {
+                if (!canWrite()) return;
                 res.write(`data: [DONE]\n\n`);
                 res.end();
             },
             onError: ((statusCode, errorMessage) => {
+                if (responseClosed || res.headersSent) return;
                 res.status(statusCode).send(errorMessage);
             })
         });
     } else {
+        const canReply = () => !(responseClosed || res.writableEnded || res.headersSent);
+
         oneShotResponse({
             model, messages, tools, toolChoice, maxTokens, numGenerations, temperature, stopSequences, frequencyPenalty, presencePenalty, isJsonOutput, givenJsonSchema,
             onData: (data) => {
-                res.header('x-request-id', getId()).json(data);
+                if (!canReply()) return;
+                res.json(data);
             },
             onError: ((statusCode, errorMessage) => {
+                if (!canReply()) return;
                 res.status(statusCode).send(errorMessage);
             })
         });
@@ -302,7 +318,7 @@ app.post('/v1/chat/completions', async (req, res) => {
 
 app.post('/v1/images/generations', async (req, res) => {
     if(!checkAuth(req, config.apiKeys)) {
-        res.sendStatus(401);
+        return res.sendStatus(401);
     }
 
     let { model, prompt, n: numImagesToGenerate, quality: qualityString, size, style, response_format: responseFormat, user } = req.body;
@@ -377,7 +393,7 @@ app.post('/v1/images/generations', async (req, res) => {
 
 app.post('/v1/images/variations', upload.single('image'), async (req, res) => {
     if(!checkAuth(req, config.apiKeys)) {
-        res.sendStatus(401);
+        return res.sendStatus(401);
     }
 
     let { model, n: numImagesToGenerate, size, response_format: responseFormat, user } = req.body;
@@ -442,7 +458,7 @@ app.post('/v1/images/edits', upload.fields([
     { name: 'mask', maxCount: 1 },
 ]), async (req, res) => {
     if(!checkAuth(req, config.apiKeys)) {
-        res.sendStatus(401);
+        return res.sendStatus(401);
     }
 
     let { prompt, model, n: numImagesToGenerate, size, response_format: responseFormat, user } = req.body;
@@ -510,7 +526,7 @@ app.post('/v1/images/edits', upload.fields([
 
 app.post('/v1/audio/speech', async (req, res) => {
     if(!checkAuth(req, config.apiKeys)) {
-        res.sendStatus(401);
+        return res.sendStatus(401);
     }
 
     let { model, input, voice, response_format: responseFormat, speed } = req.body;
@@ -567,7 +583,7 @@ app.post('/v1/audio/speech', async (req, res) => {
 
 app.post('/v1/audio/transcriptions', upload.single('file'), async (req, res) => {
     if(!checkAuth(req, config.apiKeys)) {
-        res.sendStatus(401);
+        return res.sendStatus(401);
     }
 
     let { model, prompt, temperature, language,  response_format: responseFormat, timestamp_granularities: timestampGranularitiesReceived} = req.body;
@@ -629,7 +645,7 @@ app.post('/v1/audio/transcriptions', upload.single('file'), async (req, res) => 
 
 app.post('/v1/audio/translations', upload.single('file'), async (req, res) => {
     if(!checkAuth(req, config.apiKeys)) {
-        res.sendStatus(401);
+        return res.sendStatus(401);
     }
 
     let { model, prompt, temperature, response_format: responseFormat} = req.body;
@@ -676,7 +692,7 @@ app.post('/v1/audio/translations', upload.single('file'), async (req, res) => {
 
 app.post('/v1/embeddings', async (req, res) => {
     if(!checkAuth(req, config.apiKeys)) {
-        res.sendStatus(401);
+        return res.sendStatus(401);
     }
 
     let { model, input, encoding_format: encodingFormat, dimensions, user } = req.body;
@@ -751,7 +767,7 @@ app.post('/v1/embeddings', async (req, res) => {
 
 app.get('/v1/models', async (req, res) => {
     if(!checkAuth(req, config.apiKeys)) {
-        res.sendStatus(401);
+        return res.sendStatus(401);
     }
 
     const modelObjects = Array.from(
@@ -775,7 +791,7 @@ app.get('/v1/models', async (req, res) => {
 
 app.get('/v1/models/:model', async (req, res) => {
     if(!checkAuth(req, config.apiKeys)) {
-        res.sendStatus(401);
+        return res.sendStatus(401);
     }
 
     const { model } = req.params;
