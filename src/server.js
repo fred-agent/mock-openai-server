@@ -258,8 +258,9 @@ app.post('/v1/chat/completions', async (req, res) => {
     } else {
         if(toolChoice) {
             if (!('type' in toolChoice)
-                || !toolChoice['type'] === 'function'
+                || toolChoice['type'] !== 'function'
                 || !('function' in toolChoice)
+                || !toolChoice['function']
                 || !('name' in toolChoice['function'])) {
                 return res.status(400).send(`Invalid 'tool_choice' definition: ${JSON.stringify(toolChoice)}.`);
             } else if (!toolChoice['function']['name']) {

@@ -1,7 +1,7 @@
 publicFilesDirectory: "public"
 server:
   host: 0.0.0.0
-  port: 8080
+  port: 8081
 apiKeys:
   - "key-1"
   - "key-2"
@@ -51,6 +51,22 @@ modelConfigs:
           arguments: { "input_string": "This is sample string" }
           regexToMatchAgainstPrompt: |
             .*reverses.*
+        - functionName: "search_documents_using_vectorization"
+          arguments:
+            {
+              "question": "search query",
+              "top_k": 5,
+              "document_library_tags_ids": [],
+              "document_uids": null,
+              "search_policy": null,
+              "owner_filter": null,
+              "team_id": null,
+              "session_id": null,
+              "include_session_scope": true,
+              "include_corpus_scope": true
+            }
+          regexToMatchAgainstPrompt: |
+            .*(search|find|document|documents|knowledge base|kb|vector|recherche|chercher|cherche|documentaire|vectorielle).*
   vlm:
     models:
       dall-e-2:

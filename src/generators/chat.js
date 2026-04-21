@@ -14,7 +14,7 @@ function initToolsCache() {
 
     functions.forEach((func) => {
         registeredFunctions[func.functionName] = {
-            'regex': new RegExp(func.regexToMatchAgainstPrompt.replace(/[\r\n]+$/, '')),
+            'regex': new RegExp(func.regexToMatchAgainstPrompt.replace(/[\r\n]+$/, ''), 'i'),
             'arguments': func.arguments
         };
     });
@@ -24,6 +24,7 @@ function getResponseForChatCompletion(messages, tools, toolChoice, returnJsonFor
     let contentOrToolCalls = null;
     let errorCode = null;
     let errorMessage = null;
+    const hasExplicitToolChoiceSpec = toolChoice != null && typeof toolChoice === 'object';
 
     const promptInputs = getPromptInputs(messages);
     const lastInput = promptInputs && promptInputs.length > 0 ? promptInputs[promptInputs.length - 1] : null;
@@ -41,7 +42,7 @@ function getResponseForChatCompletion(messages, tools, toolChoice, returnJsonFor
             tools,
             (typeof toolChoice === 'string' && toolChoice === 'auto'),
             (typeof toolChoice === 'string' && toolChoice === 'required'),
-            typeof toolChoice !== 'string',
+            hasExplicitToolChoiceSpec,
             toolChoice
         );
 
@@ -52,7 +53,7 @@ function getResponseForChatCompletion(messages, tools, toolChoice, returnJsonFor
         } else {
             contentOrToolCalls = {
                 'tool_calls': toolResponse['toolCalls'],
-                'content': toolResponse['toolCalls'] ? null : "Unable to find any matching tool."
+                'content': toolResponse['toolCalls'] ? null : getNonToolResponse(lastInput, returnJsonFormattedStrings)
             }
         }
     }
@@ -99,14 +100,19 @@ function getToolResponse(lastInput, tools, toolChoiceAuto, toolChoiceRequired, t
     let errorMessage = null;
 
     if(toolChoiceSpec) {
-        if(registeredFunctions[toolChoiceGivenSpec.function.name]) {
+        const requiredToolName = toolChoiceGivenSpec?.function?.name;
+
+        if(!requiredToolName) {
+            errorCode = 400;
+            errorMessage = `Invalid 'tool_choice' definition: ${JSON.stringify(toolChoiceGivenSpec)}.`;
+        } else if(registeredFunctions[requiredToolName]) {
             toolCalls = [{
-                name: toolChoiceGivenSpec.function.name,
-                arguments: registeredFunctions[toolChoiceGivenSpec.function.name].arguments
+                name: requiredToolName,
+                arguments: registeredFunctions[requiredToolName].arguments
             }];
         } else {
             errorCode = 400;
-            errorMessage = `Sample response for required function: ${toolChoiceSpec.function.name} not given in mock server config.`;
+            errorMessage = `Sample response for required function: ${requiredToolName} not given in mock server config.`;
         }
     } else {
         const matchingFunctionsAndArgs = getMatchingFunctionsAndArgs(tools, lastInput?.user?.text);
