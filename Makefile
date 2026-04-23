@@ -2,10 +2,16 @@
 
 DOCKER ?= docker
 NPM ?= npm
+HELM ?= helm
+K3D ?= k3d
 IMAGE ?= mock-openai-server:dev
 REGISTRY ?=
 IMAGE_FULL := $(if $(REGISTRY),$(REGISTRY)/,)$(IMAGE)
 PORT ?= 8383
+HELM_RELEASE ?= mock-openai-server
+HELM_NAMESPACE ?= fred
+HELM_CHART ?= deploy/helm/mock-openai-server
+K3D_CLUSTER ?= fred
 
 ##@ App
 
@@ -30,6 +36,17 @@ docker-run: docker-build ## Run the image locally exposing PORT
 .PHONY: docker-smoke
 docker-smoke: docker-build ## Hit /health once inside the container
 	$(DOCKER) run --rm -p $(PORT):$(PORT) -e PORT=$(PORT) $(IMAGE_FULL) sh -c "wget -qO- http://localhost:$$PORT/health"
+
+.PHONY: k3d-import
+k3d-import: ## Import the image into the k3d cluster
+	$(K3D) image import $(IMAGE_FULL) -c $(K3D_CLUSTER)
+
+.PHONY: k3d-deploy
+k3d-deploy: ## Deploy to the k3d cluster with Helm
+	$(HELM) upgrade --install $(HELM_RELEASE) $(HELM_CHART) --namespace $(HELM_NAMESPACE) --create-namespace
+
+.PHONY: k3d-all
+k3d-all: docker-build k3d-import k3d-deploy ## Build, import, and deploy to the k3d cluster
 
 ##@ Clean
 
