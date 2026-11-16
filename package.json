@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "server": "node src/server.js",
+    "test": "node --test",
     "examples": "node src/examples.js"
   },
   "keywords": [],

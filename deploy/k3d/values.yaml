@@ -1,0 +1,38 @@
+# sizing: one shared mock; avoid an artificial CPU throttle during concurrency runs.
+replicaCount: 1
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: null
+    memory: 512Mi
+
+# address: internal service, reachable from both Fred namespaces.
+service:
+  type: ClusterIP
+  port: 8383
+env:
+  HOST: "0.0.0.0"
+  PORT: "8383"
+ingress:
+  enabled: false
+
+# models: fixed text and asynchronous delay for a chat-only baseline.
+# The chart's disposable mock keys (including key-1) remain in effect.
+config:
+  server:
+    host: "0.0.0.0"
+    port: 8383
+  responseDelay:
+    enable: true
+    minDelayMs: 1000
+    maxDelayMs: 1000
+  monitoring:
+    summaryLogIntervalMs: 5000
+  modelConfigs:
+    chat:
+      sampleResponses:
+        - "Mock benchmark response."
+      tools:
+        functions: []

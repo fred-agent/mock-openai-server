@@ -1,4 +1,5 @@
 import express from 'express';
+import {benchmarkProfile, benchmarkResponse} from './impls/benchmark.js';
 import {getId, clipText, getTimestampSeconds, isIso6391_1, getRandomDivisibleBy, sleep} from "./utils.js";
 import {oneShotResponse, streamResponse} from './impls/chat.js';
 import {textToImage, getImageFileName, parseDimensions} from './impls/image.js';
@@ -19,6 +20,7 @@ const __dirname = path.dirname(__filename);
 
 const contents = fs.readFileSync('./config.yaml', 'utf-8');
 const config = yaml.parse(contents);
+const activeBenchmarkProfile = benchmarkProfile(process.env.MOCK_BENCHMARK_PROFILE);
 
 // allow container/runtime overrides for host/port
 config.server = {
@@ -75,7 +77,16 @@ app.use((req, res, next) => {
     inFlightRequests++;
     windowStarted++;
 
+    let settled = false;
+    res.once('close', () => {
+        if (!settled) {
+            settled = true;
+            inFlightRequests--;
+        }
+    });
     res.on('finish', () => {
+        if (settled) return;
+        settled = true;
         inFlightRequests--;
         windowCompleted++;
         const durationMs = Number(process.hrtime.bigint() - startNs) / 1e6;
@@ -137,6 +148,8 @@ app.post('/v1/chat/completions', async (req, res) => {
 
     const requestId = getId();
     res.setHeader('x-request-id', requestId);
+
+    if (await benchmarkResponse(req, res, activeBenchmarkProfile, chatModelConfigs.models)) return;
 
     let { model, messages, tools, tool_choice: toolChoice, stream, stream_options: streamOptions, max_tokens: maxTokensOld, max_completion_tokens: maxTokensNew, temperature, stop: stopSequences, top_p: topP, n: numGenerations, user, frequency_penalty: frequencyPenalty, presence_penalty: presencePenalty, response_format: responseFormat } = req.body;
 
@@ -815,6 +828,6 @@ app.get('/v1/models/:model', async (req, res) => {
 
 app.use('/public', express.static(path.join(__dirname, config.publicFilesDirectory)));
 
-app.listen(config.server.port, config.server.host, () => {
-    console.log(`Mock OpenAI API server is running at http://${config.server.host}:${config.server.port}`);
+const server = app.listen(config.server.port, config.server.host, () => {
+    console.log(`Mock OpenAI API server is running at http://${config.server.host}:${server.address().port}`);
 });

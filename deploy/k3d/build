@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# The factory imports these images and passes images.yaml to Helmfile.
+root="$(cd "$(dirname "$0")/../.." && pwd)"
+out="${K3D_APP_OUT:?the factory provides K3D_APP_OUT}"
+image="mock-openai-server:${IMAGE_TAG:?the factory provides IMAGE_TAG}"
+mkdir -p "$out"
+
+make -C "$root" docker-build IMAGE="$image" REGISTRY=
+id="$(docker image inspect --format '{{.Id}}' "$image")"
+tag="k3d-${id#sha256:}"
+docker tag "$image" "mock-openai-server:$tag"
+printf 'mock-openai-server:%s\n' "$tag" >"$out/images.txt"
+printf 'image:\n  repository: mock-openai-server\n  tag: "%s"\n' "$tag" >"$out/images.yaml"
