@@ -26,6 +26,8 @@ spec:
               value: {{ .Values.env.HOST | quote }}
             - name: PORT
               value: {{ .Values.env.PORT | quote }}
+            - name: MOCK_BENCHMARK_PROFILE
+              value: {{ ternary "" .Values.benchmark.profile (eq .Values.benchmark.profile "none") | quote }}
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}

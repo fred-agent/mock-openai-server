@@ -29,6 +29,10 @@ resources:
 
 replicaCount: 1
 
+# Opt-in deterministic marked chat requests; ordinary requests keep config below.
+benchmark:
+  profile: none
+
 env:
   HOST: "0.0.0.0"
   PORT: "8383"

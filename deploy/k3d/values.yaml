@@ -1,5 +1,8 @@
 # sizing: one shared mock; avoid an artificial CPU throttle during concurrency runs.
 replicaCount: 1
+# Select reference/streaming explicitly via factory BENCH or a values overlay.
+benchmark:
+  profile: none
 resources:
   requests:
     cpu: 100m

@@ -13,15 +13,46 @@ imports it into k3d, creates `fred-bench` if needed, and waits for the mock.
 Repeat the deployment command after changing code or configuration; configuration
 changes restart the pod automatically. No Fred deployment is changed.
 
+Deterministic benchmark profiles are **off by default**, including in k3d. To
+enable history evidence and deterministic pacing, use the factory's explicit
+opt-in on both validation and deployment (repeat the same command on redeploy):
+
+```bash
+make k3d-app-validate FRED=bench DIR="$HOME/Work/common/mock-openai-server" BENCH=reference
+make k3d-app FRED=bench DIR="$HOME/Work/common/mock-openai-server" BENCH=reference
+# Use BENCH=streaming for 100 paced fragments; omit BENCH for the legacy baseline.
+```
+
+The factory passes a versioned Helm values overlay setting `benchmark.profile`.
+Helm renders `MOCK_BENCHMARK_PROFILE` into the pod specification, so the selected
+profile survives pod recreation and is reproducible with the same deployment
+command. No `kubectl set env` step is needed. The chart accepts exactly `none`,
+`reference`, or `streaming`; invalid values fail validation before rollout.
+The generic chart also defaults to `none` and retains its configured models,
+sample response arrays and tools.
+
+For an operator-owned persistent configuration, save this overlay and pass it
+as `VALUES=/absolute/path/benchmark.yaml` on every validation/deployment instead
+of `BENCH`:
+
+```yaml
+benchmark:
+  profile: reference
+```
+
+Use `profile: none` to disable it. Profiles apply only to marked requests as
+described below; they replace the configured response delay for those requests,
+so no second delay is added.
+
 Both Swift and Weaver can use the same internal base URL:
 `http://mock-openai-server.fred-bench.svc.cluster.local:8383/v1`, model `gpt-4o`,
 and disposable mock API key `key-1`. Configure their model selection separately.
 
 `deploy/k3d/values.yaml` sets one replica, one fixed text response, no tool calls,
 and a fixed asynchronous delay of 1000 ms. It overrides the chart configuration;
-the root `config.yaml` is only the local `make dev` configuration. The mock sends
-text in one SSE chunk, not a paced token stream. CPU has a request but no limit;
-watch resource use to ensure the mock itself is not saturated.
+the root `config.yaml` is only the local `make dev` configuration. With the profile
+disabled, the mock sends text in one SSE chunk, not a paced token stream. CPU has
+a request but no limit; watch resource use to ensure the mock itself is not saturated.
 
 To override the delay without editing the checkout, create a values file:
 
@@ -47,7 +78,8 @@ make k3d-app-uninstall FRED=bench DIR="$HOME/Work/common/mock-openai-server"
 
 ### Opt-in deterministic chat benchmarks
 
-Start a **separate local instance** (no deployment change is needed):
+For k3d, use the persistent Helm setting above. Alternatively, start a
+**separate local instance** (no deployment change is needed):
 
 ```bash
 MOCK_BENCHMARK_PROFILE=reference HOST=127.0.0.1 PORT=0 npm run server
@@ -109,6 +141,9 @@ Run `npm test` (Node.js 20+). Tests use temporary configuration files and isolat
 servers on ephemeral loopback ports; they never contact the live mock or Fred.
 They cover profile opt-in, evidence, concurrent reference requests, real paced
 SSE, legacy text/tool behavior, validation, backpressure and cancellation.
+Run `npm run test:helm` with Helm installed for offline deployment checks:
+neutral defaults, all three profile values, preserved model configuration and
+invalid-profile rejection. Neither command deploys to a cluster.
 
 ### Mock OpenAI Server 
 1. Nodejs express server app to faithfully mock all important OpenAI endpoints (chat, embeddings, image, audio and models).
